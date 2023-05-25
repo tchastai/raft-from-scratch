@@ -93,7 +93,7 @@ func (rf *Raft) Heartbeat(args HeartbeatArgs, reply *HeartbeatReply) error {
 	return nil
 }
 
-func (rf *Raft) start() {
+func (rf *Raft) start(kvChan <-chan KeyValue) {
 	rf.state = Follower
 	rf.currentTerm = 0
 	rf.votedFor = -1
@@ -103,6 +103,7 @@ func (rf *Raft) start() {
 	rpc.Register(rf)
 	rpc.HandleHTTP()
 	go func() {
+
 		err := http.ListenAndServe(rf.Port, nil)
 		if err != nil {
 			log.Fatal("listen error: ", err)
@@ -201,7 +202,10 @@ func (rf *Raft) sendRequestVote(serverID int, args VoteArgs, reply *VoteReply) {
 }
 
 func (rf *Raft) broadcastHeartbeat() {
-	for i := range rf.nodes {
+	for i, v := range rf.nodes {
+		if v.Address == rf.Port {
+			continue
+		}
 
 		var args HeartbeatArgs
 		args.Term = rf.currentTerm
@@ -214,7 +218,7 @@ func (rf *Raft) broadcastHeartbeat() {
 			args.PrevLogTerm = rf.log[prevLogIndex].LogTerm
 			args.Entries = rf.log[prevLogIndex:]
 
-			log.Printf("send entries: %v\n", args.Entries)
+			//log.Printf("send entries: %v\n", args.Entries)
 		}
 
 		go func(i int, args HeartbeatArgs) {

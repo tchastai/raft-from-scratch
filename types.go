@@ -41,3 +41,15 @@ func NewNode(address string) *Node {
 		Address: address,
 	}
 }
+
+type KeyValue struct {
+	Key   string
+	Value string
+}
+
+func NewKeyValue(key, value string) *KeyValue {
+	return &KeyValue{
+		Key:   key,
+		Value: value,
+	}
+}
