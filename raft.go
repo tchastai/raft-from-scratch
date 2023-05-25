@@ -4,69 +4,43 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
+	"net/http"
 	"net/rpc"
 	"time"
 )
 
-type node struct {
-	connect bool
-	address string
-}
-
-func newNode(address string) *node {
-	return &node{
-		address: address,
-	}
-}
-
-// State def
 type State int
 
-// status of node
 const (
 	Follower State = iota + 1
 	Candidate
 	Leader
 )
 
-// LogEntry struct
-type LogEntry struct {
-	LogTerm  int
-	LogIndex int
-	LogCMD   interface{}
-}
-
-// Raft Node
 type Raft struct {
-	me int
-
-	nodes map[int]*node
-
+	me          int
+	nodes       map[int]*Node
 	state       State
 	currentTerm int
 	votedFor    int
 	voteCount   int
-
-	log []LogEntry
-
+	log         []LogEntry
 	commitIndex int
-
 	lastApplied int
-
-	nextIndex []int
-
-	matchIndex []int
-
-	heartbeatC chan bool
-	toLeaderC  chan bool
-	Storage    Storage
+	nextIndex   []int
+	matchIndex  []int
+	heartbeatC  chan bool
+	toLeaderC   chan bool
+	Storage     Storage
+	Port        string
 }
 
-func NewRaft(me int, nodes map[int]*node, storage Storage) *Raft {
+func NewRaft(me int, nodes map[int]*Node, storage Storage, port string) *Raft {
 	return &Raft{
 		me:      me,
 		nodes:   nodes,
 		Storage: storage,
+		Port:    port,
 	}
 }
 
@@ -116,18 +90,7 @@ func (rf *Raft) Heartbeat(args HeartbeatArgs, reply *HeartbeatReply) error {
 	reply.Term = rf.currentTerm
 	reply.NextIndex = rf.getLastIndex() + 1
 
-	// for i := 0; i < len(args.Entries); i++ {
-	// 	rf.UpdateDB(args.Entries[i].LogCMD.Key, args.Entries[i].LogCMD.Value)
-	// }
-
 	return nil
-}
-
-func (rf *Raft) UpdateDB(key, value string) {
-	err := rf.Storage.Set(key, value)
-	if err != nil {
-		fmt.Printf("An errror occured : %s", err)
-	}
 }
 
 func (rf *Raft) start() {
@@ -137,10 +100,18 @@ func (rf *Raft) start() {
 	rf.heartbeatC = make(chan bool)
 	rf.toLeaderC = make(chan bool)
 
+	rpc.Register(rf)
+	rpc.HandleHTTP()
 	go func() {
+		err := http.ListenAndServe(rf.Port, nil)
+		if err != nil {
+			log.Fatal("listen error: ", err)
+		}
+		fmt.Printf("Server is listening on port %s\n", rf.Port)
+	}()
 
+	go func() {
 		rand.Seed(time.Now().UnixNano())
-
 		for {
 			switch rf.state {
 			case Follower:
@@ -176,13 +147,7 @@ func (rf *Raft) start() {
 						i := 0
 						for {
 							i++
-							// kv := KeyValue{
-							// 	Key:   "Key N°" + fmt.Sprint(i),
-							// 	Value: "Value N°" + fmt.Sprint(i),
-							// }
 							rf.log = append(rf.log, LogEntry{rf.currentTerm, i, fmt.Sprint("hello ", i)})
-							// rf.log = append(rf.log, LogEntry{rf.currentTerm, i, kv})
-							// rf.UpdateDB(kv.Key, kv.Value)
 							time.Sleep(3 * time.Second)
 						}
 					}()
@@ -193,17 +158,6 @@ func (rf *Raft) start() {
 			}
 		}
 	}()
-}
-
-type VoteArgs struct {
-	Term        int
-	CandidateID int
-}
-
-type VoteReply struct {
-	Term int
-
-	VoteGranted bool
 }
 
 func (rf *Raft) broadcastRequestVote() {
@@ -221,9 +175,10 @@ func (rf *Raft) broadcastRequestVote() {
 }
 
 func (rf *Raft) sendRequestVote(serverID int, args VoteArgs, reply *VoteReply) {
-	client, err := rpc.DialHTTP("tcp", rf.nodes[serverID].address)
+	client, err := rpc.DialHTTP("tcp", rf.nodes[serverID].Address)
 	if err != nil {
-		log.Fatal("dialing: ", err)
+		fmt.Printf("An error occured while connecting to nodes with ID=%d with error=%s", serverID, err)
+		// log.Fatal("dialing: ", err)
 	}
 
 	defer client.Close()
@@ -243,31 +198,6 @@ func (rf *Raft) sendRequestVote(serverID int, args VoteArgs, reply *VoteReply) {
 	if rf.voteCount >= len(rf.nodes)/2+1 {
 		rf.toLeaderC <- true
 	}
-}
-
-type KeyValue struct {
-	Key   string
-	Value string
-}
-
-type HeartbeatArgs struct {
-	Term     int
-	LeaderID int
-
-	PrevLogIndex int
-
-	PrevLogTerm int
-
-	Entries []LogEntry
-
-	LeaderCommit int
-}
-
-type HeartbeatReply struct {
-	Success bool
-	Term    int
-
-	NextIndex int
 }
 
 func (rf *Raft) broadcastHeartbeat() {
@@ -295,7 +225,7 @@ func (rf *Raft) broadcastHeartbeat() {
 }
 
 func (rf *Raft) sendHeartbeat(serverID int, args HeartbeatArgs, reply *HeartbeatReply) {
-	client, err := rpc.DialHTTP("tcp", rf.nodes[serverID].address)
+	client, err := rpc.DialHTTP("tcp", rf.nodes[serverID].Address)
 	if err != nil {
 		log.Fatal("dialing:", err)
 	}

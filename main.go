@@ -7,8 +7,8 @@ import (
 )
 
 func main() {
-
-	port := flag.String("port", ":3000", "Give your listen port for server")
+	serverPort := flag.String("serverport", ":3000", "Give your listen port for server")
+	raftPort := flag.String("raftport", ":3001", "Give your listen port for raft")
 	cluster := flag.String("cluster", "127.0.0.1:3000", "Give cluster ip comma seperated")
 	id := flag.Int("id", 1, "Give the actual node id")
 	flag.Parse()
@@ -17,14 +17,14 @@ func main() {
 
 	time.Sleep(time.Second * 5)
 
-	ns := make(map[int]*node)
+	ns := make(map[int]*Node)
 	for k, v := range clusters {
-		ns[k] = newNode(v)
+		ns[k] = NewNode(v)
 	}
 
 	storage := NewStore()
-	raft := NewRaft(*id, ns, storage)
-	serverOpts := NewServerOpts(*port)
+	raft := NewRaft(*id, ns, storage, *raftPort)
+	serverOpts := NewServerOpts(*serverPort)
 	server := NewServer(*serverOpts, *raft)
 	server.Start()
 	select {}

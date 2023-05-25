@@ -26,8 +26,8 @@ make build
 Start applications with two nodes
 
 ```bash
-./bin/raft-from-scratch --id 1 --cluster 127.0.0.1:45000,127.0.0.1:47000 --port :45000
-./bin/raft-from-scratch --id 2 --cluster 127.0.0.1:45000,127.0.0.1:47000 --port :47000
+./bin/raft-from-scratch --id 1 --cluster 127.0.0.1:45001,127.0.0.1:47001 --serverport :45000 --raftport :45001
+./bin/raft-from-scratch --id 2 --cluster 127.0.0.1:45001,127.0.0.1:47001 --serverport :47000 --raftport :47001
 ```
 
 ## About Raft Algorithm

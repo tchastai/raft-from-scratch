@@ -3,6 +3,3 @@ build:
 
 run: build
 	./bin/raft-from-scratch
-
-test:
-	go test ./...
