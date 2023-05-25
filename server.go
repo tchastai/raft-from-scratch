@@ -33,9 +33,9 @@ func NewServer(serverOpts ServerOpts, raft Raft) *Server {
 
 func (s *Server) Start() {
 
-	go s.Raft.start(s.KvChan)
+	s.Raft.start(s.KvChan)
 
-	go s.ListenAndServe(s.KvChan)
+	s.ListenAndServe(s.KvChan)
 
 	for {
 		select {
