@@ -3,7 +3,7 @@ package main
 type LogEntry struct {
 	LogTerm  int
 	LogIndex int
-	LogCMD   interface{}
+	LogCMD   KeyValue
 }
 
 type VoteArgs struct {

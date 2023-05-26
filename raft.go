@@ -100,6 +100,19 @@ func (rf *Raft) start(kvChan <-chan KeyValue) {
 	rf.heartbeatC = make(chan bool)
 	rf.toLeaderC = make(chan bool)
 
+	go func() {
+		i := 0
+		for {
+			select {
+			case msg := <-kvChan:
+				kv := NewKeyValue(msg.Key, msg.Value)
+				fmt.Printf("Raft received key=%s and value=%s\n", msg.Key, msg.Value)
+				rf.log = append(rf.log, LogEntry{rf.currentTerm, i, *kv})
+				i++
+			}
+		}
+	}()
+
 	rpc.Register(rf)
 	rpc.HandleHTTP()
 	go func() {
@@ -144,14 +157,14 @@ func (rf *Raft) start(kvChan <-chan KeyValue) {
 						rf.matchIndex[i] = 0
 					}
 
-					go func() {
-						i := 0
-						for {
-							i++
-							rf.log = append(rf.log, LogEntry{rf.currentTerm, i, fmt.Sprint("hello ", i)})
-							time.Sleep(3 * time.Second)
-						}
-					}()
+					// go func() {
+					// 	i := 0
+					// 	for {
+					// 		i++
+					// 		rf.log = append(rf.log, LogEntry{rf.currentTerm, i, fmt.Sprint("hello ", i)})
+					// 		time.Sleep(3 * time.Second)
+					// 	}
+					// }()
 				}
 			case Leader:
 				rf.broadcastHeartbeat()
@@ -217,8 +230,7 @@ func (rf *Raft) broadcastHeartbeat() {
 			args.PrevLogIndex = prevLogIndex
 			args.PrevLogTerm = rf.log[prevLogIndex].LogTerm
 			args.Entries = rf.log[prevLogIndex:]
-
-			//log.Printf("send entries: %v\n", args.Entries)
+			log.Printf("send entries: %v\n", args.Entries)
 		}
 
 		go func(i int, args HeartbeatArgs) {

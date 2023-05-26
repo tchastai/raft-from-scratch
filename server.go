@@ -33,17 +33,9 @@ func NewServer(serverOpts ServerOpts, raft Raft) *Server {
 
 func (s *Server) Start() {
 
-	s.Raft.start(s.KvChan)
+	go s.Raft.start(s.KvChan)
 
 	s.ListenAndServe(s.KvChan)
-
-	for {
-		select {
-		case msg := <-s.KvChan:
-			// Envoyer le message à un autre serveur ou effectuer d'autres actions
-			fmt.Println("Message reçu:", msg.Key)
-		}
-	}
 
 }
 
