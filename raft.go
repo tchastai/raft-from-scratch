@@ -6,6 +6,7 @@ import (
 	"math/rand"
 	"net/http"
 	"net/rpc"
+	"sync"
 	"time"
 )
 
@@ -18,6 +19,7 @@ const (
 )
 
 type Raft struct {
+	mu          sync.Mutex
 	me          int
 	nodes       map[int]*Node
 	state       State
@@ -86,6 +88,7 @@ func (rf *Raft) Heartbeat(args HeartbeatArgs, reply *HeartbeatReply) error {
 
 	rf.log = append(rf.log, args.Entries...)
 	rf.commitIndex = rf.getLastIndex()
+	fmt.Println("commit index =", rf.commitIndex)
 	reply.Success = true
 	reply.Term = rf.currentTerm
 	reply.NextIndex = rf.getLastIndex() + 1
@@ -99,19 +102,6 @@ func (rf *Raft) start(kvChan <-chan KeyValue) {
 	rf.votedFor = -1
 	rf.heartbeatC = make(chan bool)
 	rf.toLeaderC = make(chan bool)
-
-	go func() {
-		i := 0
-		for {
-			select {
-			case msg := <-kvChan:
-				kv := NewKeyValue(msg.Key, msg.Value)
-				fmt.Printf("Raft received key=%s and value=%s\n", msg.Key, msg.Value)
-				rf.log = append(rf.log, LogEntry{rf.currentTerm, i, *kv})
-				i++
-			}
-		}
-	}()
 
 	rpc.Register(rf)
 	rpc.HandleHTTP()
@@ -157,11 +147,34 @@ func (rf *Raft) start(kvChan <-chan KeyValue) {
 						rf.matchIndex[i] = 0
 					}
 
+					go func() {
+						i := 0
+						for {
+							select {
+							case msg := <-kvChan:
+								kv := NewKeyValue(msg.Key, msg.Value)
+								rf.log = append(rf.log, LogEntry{rf.currentTerm, i, *kv})
+								fmt.Printf("Raft received key=%s and value=%s\n", msg.Key, msg.Value)
+
+								// err := rf.Storage.Set(kv.Key, kv.Value)
+								// if err == nil {
+								// 	rf.mu.Lock()
+								// 	rf.log = append(rf.log, LogEntry{rf.currentTerm, i, *kv})
+								// 	i++
+								// 	rf.mu.Unlock()
+								// } else {
+								// 	fmt.Printf("An error occured while trying to add new element to database err=%s", err)
+								// }
+							}
+						}
+					}()
+
 					// go func() {
 					// 	i := 0
 					// 	for {
 					// 		i++
-					// 		rf.log = append(rf.log, LogEntry{rf.currentTerm, i, fmt.Sprint("hello ", i)})
+					// 		kv := NewKeyValue("toto"+fmt.Sprint(i), "totozaure")
+					// 		rf.log = append(rf.log, LogEntry{rf.currentTerm, i, *kv})
 					// 		time.Sleep(3 * time.Second)
 					// 	}
 					// }()
@@ -192,7 +205,7 @@ func (rf *Raft) sendRequestVote(serverID int, args VoteArgs, reply *VoteReply) {
 	client, err := rpc.DialHTTP("tcp", rf.nodes[serverID].Address)
 	if err != nil {
 		fmt.Printf("An error occured while connecting to nodes with ID=%d with error=%s", serverID, err)
-		// log.Fatal("dialing: ", err)
+		log.Fatal("dialing: ", err)
 	}
 
 	defer client.Close()
